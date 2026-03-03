@@ -45,10 +45,14 @@ function markDone(queueFile, itemId, result) {
 }
 
 // Mark item as changes_requested
+// For Kimi: also re-opens the corresponding Minimax item
 function markChangesRequested(queueFile, itemId, feedback) {
     const queue = readQueue(queueFile);
+    let prUrl = null;
+    
     const updated = queue.map(item => {
         if (item.id === itemId) {
+            prUrl = item.url; // Save PR URL to find Minimax item
             return { 
                 ...item, 
                 status: 'changes_requested',
@@ -59,6 +63,30 @@ function markChangesRequested(queueFile, itemId, feedback) {
     });
     writeQueue(queueFile, updated);
     console.log(`Marked ${itemId} as changes_requested`);
+    
+    // If this is kimi-queue, also re-open the minimax item
+    if (queueFile === KIMI_QUEUE && prUrl) {
+        // Extract repo URL from PR URL
+        // PR: https://github.com/user/repo/pull/123
+        // Repo: https://github.com/user/repo
+        const repoUrl = prUrl.replace(/\/pull\/\d+$/, '');
+        
+        // Find and update corresponding minimax item
+        const minimaxQueue = readQueue(MINIMAX_QUEUE);
+        const minimaxUpdated = minimaxQueue.map(item => {
+            if (item.url === repoUrl && item.status === 'done') {
+                console.log(`Re-opening Minimax item for ${repoUrl}`);
+                return {
+                    ...item,
+                    status: 'changes_requested',
+                    feedback: feedback,
+                    kimi_review: feedback
+                };
+            }
+            return item;
+        });
+        writeQueue(MINIMAX_QUEUE, minimaxUpdated);
+    }
 }
 
 // Add PR to kimi queue (called by Minimax after creating PR)
