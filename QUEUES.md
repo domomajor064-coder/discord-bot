@@ -22,11 +22,36 @@ Two queue files (JSONL format) with status tracking:
 
 ## Status Flow
 
+### Initial Review Cycle
 ```
 pending → processing → done
-   ↓
-spawn worker
+                    ↓
+            changes_requested
+                    ↓
+            pending_review → processing → done
 ```
+
+### Status Definitions
+- `pending` — New item, waiting for worker
+- `processing` — Worker currently active
+- `done` — Completed successfully
+- `changes_requested` — Reviewer found issues, needs fixes
+- `pending_review` — Fixes made, ready for re-review
+
+### Re-review Flow
+1. **Kimi reviews** → marks `changes_requested` with feedback
+2. **Minimax sees `changes_requested`** → makes fixes → marks `pending_review`
+3. **Kimi sees `pending_review`** → re-reviews → marks `done` (or `changes_requested` again)
+
+### State Transitions
+| From | To | Trigger |
+|------|-----|---------|
+| pending | processing | Worker spawned |
+| processing | done | Work completed |
+| processing | changes_requested | Reviewer found issues |
+| changes_requested | pending_review | Fixes pushed |
+| pending_review | processing | Re-review started |
+| processing | done | Re-review approved |
 
 ## Deduplication
 

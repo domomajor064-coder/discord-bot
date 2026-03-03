@@ -1,0 +1,6 @@
+
+> discord-bot-queues@2.0.0 start
+> node server.js
+
+🤖 Bot server on port 3002
+✅ Slash command /dev registered

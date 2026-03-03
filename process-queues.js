@@ -43,20 +43,35 @@ function markSpawned(id) {
     fs.appendFileSync(SPAWNED_FILE, id + '\n');
 }
 
+// Track re-reviews separately (same ID, new spawn)
+function markSpawnedWithStatus(id, status) {
+    fs.appendFileSync(SPAWNED_FILE, `${id}:${status}\n`);
+}
+
+function wasSpawnedWithStatus(id, status) {
+    if (!fs.existsSync(SPAWNED_FILE)) return false;
+    const content = fs.readFileSync(SPAWNED_FILE, 'utf8');
+    return content.includes(`${id}:${status}`);
+}
+
 // Process minimax queue
+// Spawns for: pending (new work), changes_requested (need fixes)
 function processMinimaxQueue() {
     const queue = readQueue(MINIMAX_QUEUE);
-    const spawned = loadSpawned();
     let spawnedCount = 0;
 
     for (const item of queue) {
-        if (item.status === 'pending' && !spawned.has(item.id)) {
-            console.log(`SPAWN_MINIMAX:${item.url}:${item.id}`);
-            markSpawned(item.id);
+        // New work: pending status, never spawned
+        if (item.status === 'pending' && !wasSpawnedWithStatus(item.id, 'pending')) {
+            console.log(`SPAWN_MINIMAX:${item.url}:${item.id}:new`);
+            markSpawnedWithStatus(item.id, 'pending');
             spawnedCount++;
-            
-            // Note: In production, this would actually spawn the worker
-            // For now, we output the command for OpenClaw to capture
+        }
+        // Fixes needed: changes_requested status, not yet processed for fixes
+        else if (item.status === 'changes_requested' && !wasSpawnedWithStatus(item.id, 'changes_requested')) {
+            console.log(`SPAWN_MINIMAX:${item.url}:${item.id}:fix`);
+            markSpawnedWithStatus(item.id, 'changes_requested');
+            spawnedCount++;
         }
     }
 
@@ -64,15 +79,22 @@ function processMinimaxQueue() {
 }
 
 // Process kimi queue
+// Spawns for: pending (new PR), pending_review (re-review after fixes)
 function processKimiQueue() {
     const queue = readQueue(KIMI_QUEUE);
-    const spawned = loadSpawned();
     let spawnedCount = 0;
 
     for (const item of queue) {
-        if (item.status === 'pending' && !spawned.has(item.id)) {
-            console.log(`SPAWN_KIMI:${item.url}:${item.id}`);
-            markSpawned(item.id);
+        // New review: pending status, never spawned
+        if (item.status === 'pending' && !wasSpawnedWithStatus(item.id, 'pending')) {
+            console.log(`SPAWN_KIMI:${item.url}:${item.id}:new`);
+            markSpawnedWithStatus(item.id, 'pending');
+            spawnedCount++;
+        }
+        // Re-review: pending_review status, not yet processed for re-review
+        else if (item.status === 'pending_review' && !wasSpawnedWithStatus(item.id, 'pending_review')) {
+            console.log(`SPAWN_KIMI:${item.url}:${item.id}:rereview`);
+            markSpawnedWithStatus(item.id, 'pending_review');
             spawnedCount++;
         }
     }
