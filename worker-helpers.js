@@ -78,10 +78,30 @@ function addToKimiQueue(prUrl) {
     return entry.id;
 }
 
+// Merge PR using gh CLI
+function mergePR(prUrl) {
+    const { execSync } = require('child_process');
+    try {
+        // Extract owner/repo and PR number from URL
+        const match = prUrl.match(/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/);
+        if (match) {
+            const repo = match[1];
+            const prNumber = match[2];
+            execSync(`gh pr merge ${prNumber} --squash --repo ${repo}`, { stdio: 'inherit' });
+            console.log(`Merged PR: ${prUrl}`);
+            return true;
+        }
+    } catch (e) {
+        console.error('Failed to merge PR:', e.message);
+        return false;
+    }
+}
+
 module.exports = {
     markDone,
     markChangesRequested,
     addToKimiQueue,
+    mergePR,
     MINIMAX_QUEUE,
     KIMI_QUEUE
 };
