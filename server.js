@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const nacl = require('tweetnacl');
-const { exec } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 
 const app = express();
@@ -11,6 +11,15 @@ const PUBLIC_KEY = process.env.DISCORD_PUBLIC_KEY;
 const APPLICATION_ID = process.env.DISCORD_APPLICATION_ID;
 const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
 const WORKER_CHANNEL_ID = process.env.WORKER_CHANNEL_ID || '1478125129577009332';
+
+// Queue file path
+const QUEUE_DIR = path.join(__dirname, 'queue');
+const QUEUE_FILE = path.join(QUEUE_DIR, 'requests.jsonl');
+
+// Ensure queue directory exists
+if (!fs.existsSync(QUEUE_DIR)) {
+    fs.mkdirSync(QUEUE_DIR, { recursive: true });
+}
 
 // Verify Discord signature
 function verifySignature(req) {
@@ -29,6 +38,21 @@ function verifySignature(req) {
     } catch (e) {
         return false;
     }
+}
+
+// Add request to queue
+function queueRequest(url, task, requestId) {
+    const entry = {
+        id: requestId || Date.now().toString(),
+        url: url,
+        task: task || null,
+        timestamp: new Date().toISOString(),
+        status: 'pending'
+    };
+    
+    fs.appendFileSync(QUEUE_FILE, JSON.stringify(entry) + '\n');
+    console.log(`📥 Queued request: ${url}`);
+    return entry.id;
 }
 
 // Register slash command
@@ -107,27 +131,14 @@ app.post('/discord/webhook', async (req, res) => {
             });
         }
 
-        // Trigger workflow
-        const triggerScript = path.join(__dirname, '..', 'workers', 'trigger-workflow.sh');
-        const cmd = task 
-            ? `"${triggerScript}" "${url}" "${task}"`
-            : `"${triggerScript}" "${url}"`;
-
-        exec(cmd, (error, stdout, stderr) => {
-            if (error) {
-                console.error('Trigger error:', error);
-                // Send error to channel
-                exec(`openclaw message send --channel discord --target ${WORKER_CHANNEL_ID} "❌ Failed to trigger workflow: ${error.message}"`);
-            } else {
-                console.log('Trigger output:', stdout);
-            }
-        });
+        // Queue the request
+        const requestId = queueRequest(url, task, id);
 
         // Respond immediately (Discord requires response within 3 seconds)
         return res.json({
             type: 4,
             data: { 
-                content: `🚀 Triggering workflow for ${url}...\nCheck <#${WORKER_CHANNEL_ID}> for progress updates.` 
+                content: `🚀 Queued workflow for ${url}\nRequest ID: \`${requestId}\`\nCheck <#${WORKER_CHANNEL_ID}> for progress updates.` 
             }
         });
     }
@@ -143,6 +154,7 @@ app.get('/health', (req, res) => {
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => {
     console.log(`🤖 Discord bot server listening on port ${PORT}`);
+    console.log(`📁 Queue file: ${QUEUE_FILE}`);
     
     // Register slash command on startup
     if (APPLICATION_ID && BOT_TOKEN) {
