@@ -133,12 +133,40 @@ app.post('/discord/webhook', async (req, res) => {
 
         // Queue the request
         const requestId = queueRequest(url, task, id);
+        
+        // Send DM to Major for immediate attention
+        const MAJOR_USER_ID = '1465893735375044973';
+        try {
+            fetch('https://discord.com/api/v10/users/@me/channels', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bot ${BOT_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ recipient_id: MAJOR_USER_ID })
+            }).then(res => res.json()).then(dmChannel => {
+                if (dmChannel.id) {
+                    return fetch(`https://discord.com/api/v10/channels/${dmChannel.id}/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bot ${BOT_TOKEN}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            content: `🚨 WORKER REQUEST\n\nURL: ${url}\nRequest ID: ${requestId}\n\nSpawn worker now.`
+                        })
+                    });
+                }
+            }).catch(e => console.error('DM failed:', e.message));
+        } catch (e) {
+            console.error('DM error:', e.message);
+        }
 
         // Respond immediately (Discord requires response within 3 seconds)
         return res.json({
             type: 4,
             data: { 
-                content: `🚀 Queued workflow for ${url}\nRequest ID: \`${requestId}\`\nCheck <#${WORKER_CHANNEL_ID}> for progress updates.` 
+                content: `🚀 Queued workflow for ${url}\nRequest ID: \`${requestId}\`\nMajor has been notified.` 
             }
         });
     }
