@@ -5,9 +5,11 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NGROK_LOG="/tmp/ngrok.log"
 
-# Kill existing sessions
+# Kill existing sessions and any stale ngrok processes
+# This ensures we don't have ngrok pointing to the wrong port (e.g., 5000 instead of 3002)
 tmux kill-session -t discord-bot 2>/dev/null
 tmux kill-session -t ngrok 2>/dev/null
+pkill -f "ngrok http" 2>/dev/null
 sleep 1
 
 # Check Discord credentials
